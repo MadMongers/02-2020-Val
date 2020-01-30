@@ -1,0 +1,410 @@
+%title: Validate::Tiny vs Validate::Simple
+%author: James Edwards
+%date: 2019-04-09
+
+-> Slide 1 <-
+=========
+
+
+I've played with Validate::Tiny but a few weeks ago Validate::Simple was
+published.
+
+
+Lets compare and see if they meet your needs.
+
+
+I'll be using 'signatures' in my examples but they're other ways to
+pass arguments that may be more appropriate.
+
+-------------------------------------------------
+
+-> # Passing by Named Parameter : Slide 2 <-
+
+
+# From The Perl Cookbook by N. Torkington, T. Christiansen
+
+
+thefunc(INCREMENT => "20s", START => "+5m", FINISH => "+30m");
+thefunc(START => "+5m", FINISH => "+30m");
+thefunc(FINISH => "+30m");
+thefunc(START => "+5m", INCREMENT => "15s");
+
+sub thefunc {
+    my %args = ( INCREMENT   => '10s', FINISH      => 0, START       => 0,
+                 @_,    # argument pair list goes here
+    );
+    ...
+}
+
+-------------------------------------------------
+
+-> # Pass a Hash Ref : Slide 3 <-
+
+
+# Stolen and modified from PerlMonks
+
+
+my %person = ( name=>'buffy',job=>'vampire slayer'   );
+
+sub describe {
+    my $person = shift;
+    say "$person->{name} is a $person->{job}"
+}
+
+describe(\\%person);
+# result: 'buffy is a vampire slayer'
+
+
+describe( { name=>'angel',job=>'vampire' } );
+# result: 'angel is a vampire'
+
+-------------------------------------------------
+
+-> # Validate::Tiny  : Slide 4 <-
+
+Validate::Tiny
+
+*Rules* provide the specifications for the *three* step validation process
+
+   Fields, Filters and Checks
+
+
+my %rules = (
+    fields  => \@field_names,
+    filters => \@filters_array,
+    checks  => \@checks_array
+);
+
+-------------------------------------------------
+
+-> # V:T : Rules -> Fields, Filters and Checks : Slide 5 <-
+
+
+*Fields* (array)
+   Contains 'names' of the fields that must be filtered, checked and returned. All
+others will be disregarded. You can use an empty array for fields, which
+will work on all input fields.
+
+
+*Filters* (array)
+   'Field Name' matches and filter subroutines
+
+
+*Checks* (array)
+  Containing name matches and check subroutine(s).
+
+        Option 1) Check subroutines with NO additional arguments from you
+
+        Option 2) Check subroutines with additional arguments from you, returning 
+                     closures (anonymous subs) are used.
+
+
+-------------------------------------------------
+
+-> # V:T : Filters : Continued : Slide 6 <-
+
+
+*Filters*
+
+   'Field Name' matches and filter subs
+
+my @filters_array = ( email    => sub { return lc $_[0] },         # Lowercase the email
+                      password => sub { $_[0] =~ s/\s//g; $_[0] }  # Remove spaces from password
+);
+
+  The 'Field Name' is matched with the perl *smart match operator*, so you could have a regular
+  expression or a reference to an array to match several fields:
+
+ # lowercase too all, if a password -> remove spaces
+my @filters_array = ( qr/.+/ => sub { lc $_[0] },    # Lowercase ALL
+                     [qw/password password2/] => sub {    # Remove spaces from both
+                         $_[0] =~ s/\s//g;                # password and password2
+                         $_[0];
+                     }
+);
+
+-------------------------------------------------
+
+-> # V:T : Filters : Continued (part2) : Slide 7 <-
+
+
+Instead of a single filter subroutine, you can pass an array of subroutines to provide
+a chain of filters:
+
+
+my @filters_array = (
+    qr/.+/ => [ sub { lc $_[0] }, sub { ucfirst $_[0] } ]
+);
+
+
+Some simple text filters are provided by the "filter()" subroutine.
+    *trim  strip  lc  uc  ucfirst*
+
+
+my @filters_array = ( name => filter(qw/strip trim lc/) );
+
+-------------------------------------------------
+
+-> # V:T : Filters : Continued (part3) : Slide 8 <-
+
+
+
+You can add a custom filters to 'filter()'
+
+
+$Validate::Tiny::FILTERS{only_digits} = sub {
+    my $val = shift // return;
+    $val =~ s/\D//g;
+    return $val;
+};
+
+
+my @filters_array = ( '_age' => filter(qw/only_digits/) );
+
+
+-------------------------------------------------
+
+-> # V:T : Checks : Slide 9 <-
+
+
+Checks
+   Containing name matches and check subroutine.
+
+   Check subroutines with NO additional arguments from you
+
+   A check subroutine takes three parameters -
+       the value to be checked,
+       a reference to the filtered input hash
+       and a scalar with the name of the checked field
+
+   checks => [
+      '_gender' => sub {
+                       my ( $value, $params, $keys ) = @_;
+                       return if $value eq 'M' || $value eq 'F';
+                       return 'Invalid gender';
+                     },
+             ],
+
+-------------------------------------------------
+
+-> # V:T : Check : Continued (part2) : Slide 10 <-
+
+
+You probably want to place checking subroutines into a library
+
+
+sub is_good_password {
+    my ( $value, $params ) = @_;
+    ...
+    return;
+}
+
+my $rules = {
+    fields => [qw/password/],
+    checks => [
+        password => [ \&is_good_password, ],
+    ]
+};
+`
+
+-------------------------------------------------
+
+-> # V:T : Check : Continued (part3) : Slide 11 <-
+
+
+Check subroutines with additional arguments from you, returning closures (anonymous subs) are used.
+
+sub is_long_between {
+    my ( $min, $max ) = @_;
+    return sub {
+        my $value = shift;
+        return if length($value) >= $min && length($value) <= $max;
+        return "Must be between $min and $max symbols";
+    };
+}
+
+my $rules = {
+    fields => qw/password/,
+    checks => [
+        password => [ is_long_between( 6, 40 ), ],
+    ]
+};
+
+-------------------------------------------------
+
+-> # V:T : Check : Continued (part4) : Slide 12 <-
+
+
+Validate::Tiny has some predefined check subroutines for you to use
+
+is_required     ( $optional_error_message );
+is_required_if  ( $condition, $optional_error_message );
+is_existing     ( $optional_error_message );
+is_equal        ( $other_field_name, $optional_error_message );
+is_long_between ( $min, $max, $optional_error_message );
+is_long_at_least( $length, $optional_error_message );
+is_long_at_most ( $length, $optional_error_message );
+is_a            ( $class, $optional_error_message );
+is_like         ( $regexp, $optional_error_message );
+is_in           ( $arrayref, $optional_error_message );
+
+-------------------------------------------------
+
+-> # Validate::Tiny : Slide 13 <-
+
+
+use Validate::Tiny ':all';
+
+my %input = ( bar => 'abc' );
+my %rules = ( fields => ['bar'], filters => filter('uc') );
+
+Procedural                                 	      00
+   my $result = validate(\\%input, \\%rules);              my $v = Validate::Tiny->new();
+   if ( $result->{success} ) {                           $v->check( \\%input, \\%rules );
+      my $values_hash = $result->{data};                 if ( $v->success ) {
+   } else {                                                 ...;
+      my $errors_hash = $result->{error};                } else {
+   }                                                        my $errors = $v->error;
+                                                         }
+
+-------------------------------------------------
+
+-> # Validate::Simple : Slide 14 <-
+
+
+We're on to Validate::Simple
+
+   my $rules = { '_username' => {
+                                type  => '...',
+                                required => 1,
+                                undef => 1,
+                                callback => sub { ... },
+                              }
+               };
+
+Common rules types
+    any             string                 array     hash     enum     code
+    number          integer
+    positive        positive_int
+    non_negatived   on_negative_int
+    negative        negative_int
+    non_positive    on_positive_int
+
+-------------------------------------------------
+
+-> # Validate::Simple : Slide 15 <-
+
+
+# Number Types can be defined more
+
+gt Greater than.
+ge Greater than or equal to.
+lt Less than.
+le Less than or equal to.
+
+my $rules = {
+   month => {
+      type => 'positive_int',
+      le   => 12,
+   },
+};
+
+-------------------------------------------------
+
+-> # Validate::Simple : Slide 16 <-
+
+
+# List types (arrays, hash)
+
+The list types *must* have the key 'of', which contains a spec of all list values. For example:
+
+my $rules = { ids =>         { type  => 'array',
+                               empty => 0,             # option
+                               of    => {
+                                   type => 'positive_int',
+                                        },
+                             },
+             placeholders => { type  => 'hash',
+                               empty => 0,             # option
+                               of    => {
+                                   type => 'string',
+                                        },
+                             },
+            };
+
+-------------------------------------------------
+
+-> # Validate::Simple : Slide 17 <-
+
+
+# Strings Constraints
+
+You can add constraints to the string length, by adding keys *max_length* and *min_length*.
+Either key must be a positive integer.
+
+my $rules = {
+        username => {
+            type       => 'string',
+            required   => 1,
+            *min_length* => 1,
+            *max_length* => 255,
+        },
+};
+
+-------------------------------------------------
+
+-> # Validate::Simple : Slide 18 <-
+
+
+# callback
+
+If you have some special constraints to a value that does not fit to any of supported types, 
+you can specify your own validation function and pass it to callback key as a coderef. The 
+function should receive the value as a first parameter and returns true or false.
+
+For example, if you need to check whether a value is an even positive integer, you can do the following:
+
+my $spec = {
+      even_positive => {
+         type     => "positive_int",
+         callback => sub { !( $_[0] % 2 ) },
+      },
+};
+
+The callback function is called *after* checking the type and constraints.
+
+-------------------------------------------------
+
+-> # Validate::Simple : Slide 19 <-
+
+Subroutines/Methods
+
+my $vs1 = Validate::Simple->new( $rules );
+my $is_valid1 = $vs1->validate( $input );
+print join "\n", $vs1->errors()               # typo in POD and errors() only shows 1 err
+   if !$is_valid1;                            # Opened ticket
+
+# OR
+
+my $vs2 = Validate::Simple->new();
+my $is_valid2 = $vs2->validate( $input, $rules );
+print join "\n", $vs2->errors()                # errors() only shows 1 err
+   if !$is_valid2;
+
+-------------------------------------------------
+
+-> The End. Qs <-
+
+Complete archive will be on the MadMongers' github page
+    [MadMongers/02-2020-Val](https://github.com/MadMongers/02-2020-Val)
+
+
+Example code:  vt.pl and vs.pl
+
+
+
+My Professional Bull Riders flack jacket sponsors are:     ;-)
+
+   NOT The US Border Patrol!!! 
+   Gov't allowed robo calls for harassment of its citizenry
+
