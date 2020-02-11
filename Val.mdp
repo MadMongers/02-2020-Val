@@ -177,7 +177,7 @@ Checks
        a reference to the filtered input hash
        and a scalar with the name of the checked field
 
-   checks => [
+   checks =>[
       '_gender' => sub {
                        my ( $value, $params, $keys ) = @_;
                        return if $value eq 'M' || $value eq 'F';
@@ -201,7 +201,7 @@ sub is_good_password {
 
 my $rules = {
     fields => [qw/password/],
-    checks => [
+    checks =>[
         password => [ \&is_good_password, ],
     ]
 };
@@ -407,4 +407,5 @@ My Professional Bull Riders flack jacket sponsors are:     ;-)
 
    NOT The US Border Patrol!!! 
    Gov't allowed robo calls for harassment of its citizenry
+   Lying Dog Pony Soliders
 
