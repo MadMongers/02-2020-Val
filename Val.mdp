@@ -154,7 +154,7 @@ You can add a custom filters to 'filter()'
 
 $Validate::Tiny::FILTERS{only_digits} = sub {
     my $val = shift // return;
-    $val =~ s/\D//g;
+    $val =~ s/\\D//g;
     return $val;
 };
 
